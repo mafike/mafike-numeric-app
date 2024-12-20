@@ -632,16 +632,59 @@ environment {
     }
   }
     post {
-     always {
-      // Publish JUnit test results
-       junit 'target/surefire-reports/*.xml'
-      // Record code coverage using the Coverage Plugin
-      recordCoverage enabledForFailure: true, qualityGates: [[criticality: 'NOTE', integerThreshold: 60, metric: 'MODULE', threshold: 60.0]], tools: [[pattern: 'target/site/jacoco/jacoco.xml'], [parser: 'JUNIT', pattern: 'target/surefire-reports/*.xml']]
-      pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-      dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
-      publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'owasp-zap-report', reportFiles: 'zap_report.html', reportName: 'OWASP ZAP HTML Report', reportTitles: 'OWASP ZAP HTML Report'])
-      publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: '.', reportFiles: 'kube-bench-combined-report.html', reportName: 'Kube-Bench HTML Report', reportTitles: 'Kube-Bench HTML Report'])
-     }
+    always {
+        script {
+            // Publish JUnit test results if they exist
+            if (fileExists('target/surefire-reports/*.xml')) {
+                echo "Publishing JUnit test results..."
+                junit 'target/surefire-reports/*.xml'
+            } else {
+                echo "JUnit test results not found. Skipping..."
+            }
+
+            // Record code coverage if the coverage report exists
+            if (fileExists('target/site/jacoco/jacoco.xml')) {
+                echo "Recording code coverage..."
+                recordCoverage enabledForFailure: true, 
+                    qualityGates: [[criticality: 'NOTE', integerThreshold: 60, metric: 'MODULE', threshold: 60.0]], 
+                    tools: [[pattern: 'target/site/jacoco/jacoco.xml'], [parser: 'JUNIT', pattern: 'target/surefire-reports/*.xml']]
+            } else {
+                echo "Code coverage report not found. Skipping..."
+            }
+
+            // Publish PIT mutation report if it exists
+            if (fileExists('**/target/pit-reports/**/mutations.xml')) {
+                echo "Publishing PIT mutation results..."
+                pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
+            } else {
+                echo "PIT mutation results not found. Skipping..."
+            }
+
+            // Publish Dependency Check report if it exists
+            if (fileExists('target/dependency-check-report.xml')) {
+                echo "Publishing Dependency Check report..."
+                dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
+            } else {
+                echo "Dependency Check report not found. Skipping..."
+            }
+
+            // Publish OWASP ZAP report if it exists
+            if (fileExists('owasp-zap-report/zap_report.html')) {
+                echo "Publishing OWASP ZAP HTML report..."
+                publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'owasp-zap-report', reportFiles: 'zap_report.html', reportName: 'OWASP ZAP HTML Report'])
+            } else {
+                echo "OWASP ZAP HTML report not found. Skipping..."
+            }
+
+            // Publish Kube-Bench report if it exists
+            if (fileExists('kube-bench-combined-report.html')) {
+                echo "Publishing Kube-Bench HTML report..."
+                publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: '.', reportFiles: 'kube-bench-combined-report.html', reportName: 'Kube-Bench HTML Report'])
+            } else {
+                echo "Kube-Bench HTML report not found. Skipping..."
+            }
+        }
+    }
     
     
    success {
