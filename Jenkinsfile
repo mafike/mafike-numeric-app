@@ -524,32 +524,11 @@ environment {
      when {
       branch 'main'
      }
-
-          steps {
-           script {
-             timeout(time: 2, unit: 'DAYS') {
-              def approvalMailContent = """
-              Project: ${env.JOB_NAME}
-              Build Number: ${env.BUILD_NUMBER}
-              Do you want to Approve the Deployment to Production Environment/Namespace?
-              Please go to build URL and approve the deployment request.
-              URL de build: ${env.BUILD_URL}
-              """
-             mail(
-             to: '04_bronze.squirm@icloud.com',
-             subject: "${currentBuild.result} CI: Project name -> ${env.JOB_NAME}", 
-             body: approvalMailContent,
-             mimeType: 'text/plain'
-             )
-            input(
-            id: "DeployGate",
-            message: "Deploy ${params.project_name}?",
-            submitter: "approver",
-            parameters: [choice(name: 'action', choices: ['Deploy'], description: 'Approve deployment')]
-            )  
-          }
-         }
-       }
+    steps {
+     timeout(time: 2, unit: 'DAYS') {
+      input 'Do you want to Approve the Deployment to Production Environment/Namespace?'
+    }
+   }
     }
   /* stage('Scale Down Spot Node Group') {
      when {
