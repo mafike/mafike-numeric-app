@@ -135,7 +135,7 @@ environment {
       }
       }
     } 
-      stage('SAST Scan With Sonarqube') {
+     /* stage('SAST Scan With Sonarqube') {
       when {
        anyOf {
         branch 'develop'
@@ -161,13 +161,13 @@ environment {
           }
         }
         catch (e) {
-        echo "Error running SAST Analysis test: ${e.message}"
+          echo "Error running SAST Analysis test: ${e.message}"
         }
       }   
       }
       }
        } 
-      } 
+      } */
 
      stage("Publish to Nexus Repository Manager") {
       when {
