@@ -18,12 +18,12 @@ fi
 # Ensure the cache directory and its contents are owned by Jenkins
 sudo chown -R jenkins:jenkins "$CACHE_DIR"
 
-# Run Trivy scans as the Jenkins user
+# Run Trivy scans with the TRIVY_CACHE_DIR environment variable
 echo "Running Trivy scan for HIGH severity vulnerabilities..."
-docker run --rm --user $(id -u):$(id -g) -v "$CACHE_DIR:/root/.cache/" aquasec/trivy:0.17.2 -q image --exit-code 0 --severity HIGH --light "$dockerImageName"
+docker run --rm --user $(id -u):$(id -g) -e TRIVY_CACHE_DIR=/root/.cache/ -v "$CACHE_DIR:/root/.cache/" aquasec/trivy:0.17.2 -q image --exit-code 0 --severity HIGH --light "$dockerImageName"
 
 echo "Running Trivy scan for CRITICAL severity vulnerabilities..."
-docker run --rm --user $(id -u):$(id -g) -v "$CACHE_DIR:/root/.cache/" aquasec/trivy:0.17.2 -q image --exit-code 1 --severity CRITICAL --light "$dockerImageName"
+docker run --rm --user $(id -u):$(id -g) -e TRIVY_CACHE_DIR=/root/.cache/ -v "$CACHE_DIR:/root/.cache/" aquasec/trivy:0.17.2 -q image --exit-code 1 --severity CRITICAL --light "$dockerImageName"
 
 # Trivy scan result processing
 exit_code=$?
