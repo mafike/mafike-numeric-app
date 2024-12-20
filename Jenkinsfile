@@ -167,7 +167,7 @@ environment {
       }
       }
        } 
-      } */
+      } 
 
      stage("Publish to Nexus Repository Manager") {
       when {
@@ -208,7 +208,7 @@ environment {
                     }
                 }
             }
-        }
+        } */
      stage('Vulnerability Scan - Docker') {
       when {
                 anyOf {
@@ -297,7 +297,7 @@ environment {
            }
         }  
       }
-    stage('Run Docker Container') {
+   /* stage('Run Docker Container') {
     when {
         expression { env.BRANCH_NAME.startsWith('feature/') }
     }
@@ -333,7 +333,7 @@ environment {
             }
         }
     }
-}
+} */
   
     
     stage('Vulnerability Scan - Kubernetes') {
@@ -388,7 +388,7 @@ environment {
           sh "kubectl apply -f k8s_deployment_service.yaml --validate=false"
         }
       }
-    } */
+    } 
      stage('Scale Up Spot Node Group') {
         when {
                 branch 'develop'
@@ -403,7 +403,7 @@ environment {
                     '''
                 }
             }
-        }
+        } */
     stage('Run CIS Benchmark') {
     when {
         anyOf {
@@ -557,7 +557,7 @@ environment {
          }
        }
     }
-   stage('Scale Down Spot Node Group') {
+  /* stage('Scale Down Spot Node Group') {
      when {
       branch 'main'
     }
@@ -573,7 +573,7 @@ environment {
                 }
             }
         }
-
+ */
    stage('K8S Deployment - PROD') {
     when {
       branch 'main'
