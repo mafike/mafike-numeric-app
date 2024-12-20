@@ -97,7 +97,7 @@ environment {
         }
         }
      }
-     stage('Unit Tests - JUnit and Jacoco') {
+     stage('Unit Tests - JUnit and Jacoco tests') {
       when {
                 expression { env.BRANCH_NAME.startsWith('feature/') }
             }
