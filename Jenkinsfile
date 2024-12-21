@@ -253,81 +253,123 @@ environment {
     }
 }
         stage('Docker Build and Push') {
-           when {
-                anyOf {
-                    branch 'develop'
-                    branch 'main'
-                    expression { env.BRANCH_NAME.startsWith('feature/') }
-                }
-            }
-            steps {
-                // Use withCredentials to access Docker credentials
-                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                    script {
-                      cache(maxCacheSize: 1073741824, defaultBranch: 'main', caches: [
-                        arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
-                    ]) {
-                      try {
+    when {
+        anyOf {
+            branch 'develop'
+            branch 'main'
+            expression { env.BRANCH_NAME.startsWith('feature/') }
+        }
+    }
+    steps {
+        withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+            script {
+                cache(maxCacheSize: 1073741824, defaultBranch: 'main', caches: [
+                    arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
+                ]) {
+                    try {
                         def dockerTag
-                           if (env.BRANCH_NAME.startsWith('feature/')) {
-                           dockerTag = "feature-${env.BRANCH_NAME}-${GIT_COMMIT}"
-                           } else if (env.BRANCH_NAME == 'develop') {
-                           dockerTag = "staging-${GIT_COMMIT}"
-                           } else if (env.BRANCH_NAME == 'main') {
-                          dockerTag = "prod-${GIT_COMMIT}"
-                      }
+                        def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
+                        
+                        if (env.BRANCH_NAME.startsWith('feature/')) {
+                            dockerTag = "feature-${sanitizedBranchName}-${GIT_COMMIT}"
+                        } else if (env.BRANCH_NAME == 'develop') {
+                            dockerTag = "staging-${GIT_COMMIT}"
+                        } else if (env.BRANCH_NAME == 'main') {
+                            dockerTag = "prod-${GIT_COMMIT}"
+                        }
 
-                   sh "echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin"
-                   sh "docker build -t mafike1/numeric-app:${dockerTag} ."
-                   sh "docker push mafike1/numeric-app:${dockerTag}"
+                        sh """
+                        echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                        docker build -t mafike1/numeric-app:${dockerTag} .
+                        docker push mafike1/numeric-app:${dockerTag}
+                        """
 
-                   echo "Docker image mafike1/numeric-app:${dockerTag} successfully built and pushed."
+                        echo "Docker image mafike1/numeric-app:${dockerTag} successfully built and pushed."
+                    } catch (e) {
+                        echo "Error building and pushing Docker image: ${e.message}"
                     }
-                    catch (e) {
-                      echo "Error building and pushing Docker image: ${e.message}"
-                      }
                 }
             }
-           }
-        }  
-      }
-   /* stage('Run Docker Container') {
+        }
+    }
+}
+
+   stage('Run Docker Container') {
     when {
         expression { env.BRANCH_NAME.startsWith('feature/') }
     }
     steps {
         script {
-            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME}-${GIT_COMMIT}"
+            // Sanitize branch name to create a valid Docker tag
+            def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-')
+            def dockerTag = "mafike1/numeric-app:feature-${sanitizedBranchName}-${GIT_COMMIT}"
+            def mysqlContainerName = "test-mysql"
+            def appContainerName = "test-app"
+            def mysqlRootPassword = "rootpassword"
+            def mysqlDatabase = "testdb"
+            def mysqlUser = "testuser"
+            def mysqlPassword = "testpassword"
 
-            echo "Running Docker container for validation on feature branch with image: ${dockerTag}"
+            echo "Starting MySQL and application containers for validation..."
 
             try {
-                // Start the Docker container
+                // Start the MySQL container
                 sh """
-                docker run --rm -d --name test-container -p 8080:8080 ${dockerTag}
-                sleep 10
+                docker run --rm -d --name ${mysqlContainerName} \
+                -e MYSQL_ROOT_PASSWORD=${mysqlRootPassword} \
+                -e MYSQL_DATABASE=${mysqlDatabase} \
+                -e MYSQL_USER=${mysqlUser} \
+                -e MYSQL_PASSWORD=${mysqlPassword} \
+                mysql:8.0
                 """
 
-                // Validate the application using the root endpoint
+                // Wait for MySQL to initialize
+                echo "Waiting for MySQL to be ready..."
+                sh """
+                for i in {1..30}; do
+                    docker exec ${mysqlContainerName} mysqladmin ping -h localhost --silent && break
+                    echo "Waiting for MySQL..."
+                    sleep 2
+                done
+                """
+
+                // Start the application container
+                sh """
+                docker run --rm -d --name ${appContainerName} \
+                --link ${mysqlContainerName}:mysql \
+                -p 8080:8080 \
+                -e DB_HOST=mysql \
+                -e DB_PORT=3306 \
+                -e DB_NAME=${mysqlDatabase} \
+                -e DB_USER=${mysqlUser} \
+                -e DB_PASSWORD=${mysqlPassword} \
+                ${dockerTag}
+                """
+
+                // Validate the application
                 echo "Validating application running inside the Docker container..."
                 sh """
+                sleep 10
                 curl -v -f http://localhost:8080/ \
                     && echo "Validation successful: Application is running on the root endpoint!" \
                     || (echo "Validation failed: Application did not respond correctly on the root endpoint!" && exit 1)
                 """
             } catch (e) {
-                // Dump container logs in case of failure for debugging
-                echo "Validation failed. Dumping container logs for debugging..."
-                sh "docker logs test-container || true"
+                // Dump logs for debugging if validation fails
+                echo "Validation failed. Dumping logs for debugging..."
+                sh "docker logs ${appContainerName} || true"
+                sh "docker logs ${mysqlContainerName} || true"
                 throw e
             } finally {
-                // Stop the container even if validation fails
-                echo "Stopping the Docker container..."
-                sh "docker stop test-container || true"
+                // Ensure containers are stopped
+                echo "Stopping Docker containers..."
+                sh "docker stop ${appContainerName} || true"
+                sh "docker stop ${mysqlContainerName} || true"
             }
         }
     }
-} */
+}
+
   
     
     stage('Vulnerability Scan - Kubernetes') {
