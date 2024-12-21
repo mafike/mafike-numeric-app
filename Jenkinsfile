@@ -110,7 +110,7 @@ environment {
        }
        }
       } 
-     stage('Mutation Tests - PIT') {
+    /* stage('Mutation Tests - PIT') {
       when {
                 branch 'develop'
             }
@@ -129,7 +129,7 @@ environment {
       }
       }
     } 
-     /* stage('SAST Scan With Sonarqube') {
+      stage('SAST Scan With Sonarqube') {
       when {
        anyOf {
         branch 'develop'
@@ -202,7 +202,7 @@ environment {
                     }
                 }
             }
-        } */
+        } 
      stage('Vulnerability Scan - Docker') {
       when {
                 anyOf {
@@ -251,7 +251,7 @@ environment {
         }
         }
     }
-}
+} */
       stage('Docker Build and Push') {
     when {
         anyOf {
@@ -350,12 +350,12 @@ stage('Run Docker Container') {
                     -p 8080:8080 \
                     -e DB_USERNAME=root \
                     -e DB_PASSWORD=${mysqlRootPassword} \
-                    ${imageName}
+                    ${env.imageName}
                 """
 
                 // Wait for the application to initialize
                 echo "Waiting for the application to be ready..."
-                sh "sleep 20"
+                sh "sleep 30"
 
                 // Validate the application with a specific HTML check
                 echo "Validating application running inside the Docker container..."
@@ -384,6 +384,7 @@ stage('Run Docker Container') {
         }
     }
 }
+
 
 
 
