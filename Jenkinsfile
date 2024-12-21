@@ -297,91 +297,87 @@ environment {
         }
 
         stage('Run Docker Container') {
-            when {
-                expression { env.BRANCH_NAME.startsWith('feature/') }
-            }
-            steps {
-                script {
-                    def mysqlContainerName = "mysql-service"
-                    def appContainerName = "test-app"
-                    def networkName = "test-network"
-                    def mysqlRootPassword = "rootpassword"
+    when {
+        expression { env.BRANCH_NAME.startsWith('feature/') }
+    }
+    steps {
+        script {
+            def mysqlContainerName = "mysql-service"
+            def appContainerName = "test-app"
+            def networkName = "test-network"
+            def mysqlRootPassword = "rootpassword"
 
-                    echo "Starting MySQL and application containers for validation..."
+            try {
+                echo "Creating Docker network: ${networkName}"
+                sh "docker network create ${networkName} || true"
 
-                    try {
-                        // Create the Docker network
-                        sh "docker network create ${networkName} || true"
+                echo "Starting MySQL container..."
+                sh """
+                docker run --rm -d --name ${mysqlContainerName} \
+                --network ${networkName} \
+                -e MYSQL_ROOT_PASSWORD=${mysqlRootPassword} \
+                mysql:8.0
+                """
 
-                        // Start MySQL container
-                        sh """
-                        docker run --rm -d --name ${mysqlContainerName} \
-                        --network ${networkName} \
-                        -e MYSQL_ROOT_PASSWORD=${mysqlRootPassword} \
-                        mysql:8.0
-                        """
+                echo "Waiting for MySQL to be ready..."
+                sh """
+                for i in {1..30}; do
+                    docker exec ${mysqlContainerName} mysqladmin ping -h localhost --silent && break
+                    echo "MySQL is not ready. Retrying..."
+                    sleep 2
+                done || (echo "MySQL did not become ready in time!" && exit 1)
+                """
 
-                        // Wait for MySQL readiness
-                        sh """
-                        for i in {1..30}; do
-                            docker exec ${mysqlContainerName} mysqladmin ping -h localhost --silent && break
-                            echo "Waiting for MySQL..."
-                            sleep 2
-                        done
-                        """
+                echo "Starting application container..."
+                sh """
+                docker run --rm -d --name ${appContainerName} \
+                --network ${networkName} \
+                -p 8080:8080 \
+                -e DB_USERNAME=root \
+                -e DB_PASSWORD=${mysqlRootPassword} \
+                ${env.imageName}
+                """
 
-                        // Start application container
-                        sh """
-                        docker run --rm -d --name ${appContainerName} \
-                        --network ${networkName} \
-                        -p 8080:8080 \
-                        -e DB_USERNAME=root \
-                        -e DB_PASSWORD=${mysqlRootPassword} \
-                        ${env.imageName}
-                        """
+                echo "Waiting for the application to start..."
+                sh """
+                for i in {1..30}; do
+                    nc -zv localhost 8080 && break
+                    echo "Application not ready yet. Retrying..."
+                    sleep 2
+                done || (echo "Application did not become ready in time!" && exit 1)
+                """
 
-                        // Wait for application readiness
-                        sh """
-                        for i in {1..30}; do
-                            curl -s http://localhost:8080/ && break
-                            echo "Waiting for the application to start..."
-                            sleep 2
-                        done
-                        """
+                echo "Validating application response..."
+                sh """
+                response=\$(curl -s http://localhost:8080/ || echo "Error")
+                echo "Raw Response: \$response"
 
-                        // Validate application response
-                        sh """
-                        response=\$(curl -s http://localhost:8080/ || echo "Error")
-                        echo "Raw Response: \$response"
+                if [ "\$response" = "Error" ]; then
+                    echo "Validation failed: Application did not respond on the expected endpoint!"
+                    exit 1
+                fi
 
-                        if [ "\$response" = "Error" ]; then
-                            echo "Validation failed: Application did not respond on the expected endpoint!"
-                            exit 1
-                        fi
-
-                        if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
-                            echo "Validation successful: HTML content matches!"
-                        else
-                            echo "Validation failed: HTML content does not match or is missing!"
-                            exit 1
-                        fi
-                        """
-                    } catch (e) {
-                        // Dump logs in case of failure
-                        echo "Validation failed. Dumping logs for debugging..."
-                        sh "docker logs ${appContainerName} || echo 'No logs available for ${appContainerName}'"
-                        sh "docker logs ${mysqlContainerName} || echo 'No logs available for ${mysqlContainerName}'"
-                        throw e
-                    } finally {
-                        // Clean up containers and network
-                        echo "Stopping Docker containers and cleaning up..."
-                        sh "docker stop ${appContainerName} || true"
-                        sh "docker stop ${mysqlContainerName} || true"
-                        sh "docker network rm ${networkName} || true"
-                    }
-                }
+                if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
+                    echo "Validation successful: HTML content matches!"
+                else
+                    echo "Validation failed: HTML content does not match or is missing!"
+                    exit 1
+                fi
+                """
+            } catch (e) {
+                echo "Dumping logs for debugging..."
+                sh "docker logs ${appContainerName} || true"
+                sh "docker logs ${mysqlContainerName} || true"
+                throw e
+            } finally {
+                echo "Cleaning up Docker containers and network..."
+                sh "docker stop ${appContainerName} || true"
+                sh "docker stop ${mysqlContainerName} || true"
+                sh "docker network rm ${networkName} || true"
             }
         }
+    }
+}
 
 
     
