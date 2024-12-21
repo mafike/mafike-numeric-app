@@ -271,7 +271,7 @@ environment {
                         def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
                         
                         if (env.BRANCH_NAME.startsWith('feature/')) {
-                            dockerTag = "feature-${sanitizedBranchName}-${GIT_COMMIT}"
+                            dockerTag = "${sanitizedBranchName}-${GIT_COMMIT}"
                         } else if (env.BRANCH_NAME == 'develop') {
                             dockerTag = "staging-${GIT_COMMIT}"
                         } else if (env.BRANCH_NAME == 'main') {
@@ -300,7 +300,6 @@ environment {
     }
     steps {
         script {
-            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME}-${GIT_COMMIT}"
             def mysqlContainerName = "mysql-service"
             def appContainerName = "test-app"
             def networkName = "test-network"
