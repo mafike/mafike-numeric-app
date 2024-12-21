@@ -343,20 +343,20 @@ environment {
                 ${dockerTag}
                 """
 
-                // Wait for the application to start
+                // Wait for the application to initialize
                 echo "Giving the application time to initialize..."
                 sh "sleep 30"
 
-                // Debug raw response
+                // Validate the application
                 echo "Validating application running inside the Docker container..."
                 sh """
-                response=\$(curl -s http://localhost:8080/ || echo "Error")
+                response=\$(curl -s http://localhost:8080/index.html || echo "Error")
                 echo "Raw Response: \$response"
 
-                if echo \$response | grep -q '<title>'; then
-                    echo "Validation successful: Application returned expected HTML content!"
+                if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
+                    echo "Validation successful: HTML content matches!"
                 else
-                    echo "Validation failed: Application did not return expected HTML content!"
+                    echo "Validation failed: HTML content does not match or is missing!"
                     exit 1
                 fi
                 """
@@ -375,6 +375,7 @@ environment {
         }
     }
 }
+
 
 
   
