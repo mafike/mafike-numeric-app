@@ -300,31 +300,23 @@ environment {
     }
     steps {
         script {
-            def dockerNetworkName = "test-network"
-            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-')}-${GIT_COMMIT}"
-            def mysqlContainerName = "test-mysql"
+            def dockerTag = "mafike1/numeric-app:${GIT_COMMIT}"
+            def mysqlContainerName = "mysql-service"
             def appContainerName = "test-app"
+            def networkName = "test-network"
             def mysqlRootPassword = "rootpassword"
-            def mysqlDatabase = "testdb"
-            def mysqlUser = "testuser"
-            def mysqlPassword = "testpassword"
 
-            echo "Setting up Docker network and running containers for validation..."
+            echo "Starting MySQL and application containers for validation..."
 
             try {
-                // Create a Docker network
-                sh """
-                docker network create ${dockerNetworkName} || true
-                """
+                // Create the Docker network
+                sh "docker network create ${networkName} || true"
 
-                // Start MySQL container on the custom network
+                // Start MySQL container
                 sh """
                 docker run --rm -d --name ${mysqlContainerName} \
-                --network ${dockerNetworkName} \
+                --network ${networkName} \
                 -e MYSQL_ROOT_PASSWORD=${mysqlRootPassword} \
-                -e MYSQL_DATABASE=${mysqlDatabase} \
-                -e MYSQL_USER=${mysqlUser} \
-                -e MYSQL_PASSWORD=${mysqlPassword} \
                 mysql:8.0
                 """
 
@@ -337,56 +329,59 @@ environment {
                 done
                 """
 
-                // Start application container on the same network
+                // Start application container
                 sh """
                 docker run --rm -d --name ${appContainerName} \
-                --network ${dockerNetworkName} \
+                --network ${networkName} \
                 -p 8080:8080 \
-                -e DB_HOST=${mysqlContainerName} \
-                -e DB_PORT=3306 \
-                -e DB_NAME=${mysqlDatabase} \
-                -e DB_USER=${mysqlUser} \
-                -e DB_PASSWORD=${mysqlPassword} \
+                -e DB_USERNAME=root \
+                -e DB_PASSWORD=${mysqlRootPassword} \
                 ${dockerTag}
                 """
 
-                // Wait for the application to initialize
-                echo "Giving the application time to initialize..."
-                sh "sleep 60"
-
-                // Validate application by HTTP status code with retries
-                echo "Validating application running inside the Docker container..."
+                // Wait for application readiness
                 sh """
-                for i in {1..5}; do
-                    status=\$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080/)
-                    echo "HTTP Status Code: \$status"
-                    if [ "\$status" -eq 200 ]; then
-                        echo "Validation successful: Application returned HTTP 200!"
-                        exit 0
-                    fi
-                    echo "Retrying in 10 seconds..."
-                    sleep 10
+                for i in {1..30}; do
+                    curl -s http://localhost:8080/ && break
+                    echo "Waiting for the application to start..."
+                    sleep 2
                 done
+                """
 
-                echo "Validation failed: Application did not return HTTP 200 after multiple attempts!"
-                exit 1
+                // Validate application response
+                sh """
+                response=\$(curl -s http://localhost:8080/ || echo "Error")
+                echo "Raw Response: \$response"
+
+                if [ "\$response" = "Error" ]; then
+                    echo "Validation failed: Application did not respond on the expected endpoint!"
+                    exit 1
+                fi
+
+                if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
+                    echo "Validation successful: HTML content matches!"
+                else
+                    echo "Validation failed: HTML content does not match or is missing!"
+                    exit 1
+                fi
                 """
             } catch (e) {
                 // Dump logs in case of failure
                 echo "Validation failed. Dumping logs for debugging..."
-                sh "docker logs ${appContainerName} || true"
-                sh "docker logs ${mysqlContainerName} || true"
+                sh "docker logs ${appContainerName} || echo 'No logs available for ${appContainerName}'"
+                sh "docker logs ${mysqlContainerName} || echo 'No logs available for ${mysqlContainerName}'"
                 throw e
             } finally {
-                // Stop containers and remove the network
+                // Clean up containers and network
                 echo "Stopping Docker containers and cleaning up..."
                 sh "docker stop ${appContainerName} || true"
                 sh "docker stop ${mysqlContainerName} || true"
-                sh "docker network rm ${dockerNetworkName} || true"
+                sh "docker network rm ${networkName} || true"
             }
         }
     }
 }
+
 
     
     stage('Vulnerability Scan - Kubernetes') {
