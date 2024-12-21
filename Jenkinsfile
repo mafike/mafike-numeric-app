@@ -296,7 +296,7 @@ environment {
             }
         }
 
-        stage('Run Docker Container') {
+      stage('Run Docker Container') {
     when {
         expression { env.BRANCH_NAME.startsWith('feature/') }
     }
@@ -307,10 +307,11 @@ environment {
             def networkName = "test-network"
             def mysqlRootPassword = "rootpassword"
 
-            try {
-                echo "Creating Docker network: ${networkName}"
-                sh "docker network create ${networkName} || true"
+            echo "Creating Docker network..."
+            sh "docker network create ${networkName} || true"
 
+            try {
+                // Start MySQL container
                 echo "Starting MySQL container..."
                 sh """
                 docker run --rm -d --name ${mysqlContainerName} \
@@ -323,11 +324,12 @@ environment {
                 sh """
                 for i in {1..30}; do
                     docker exec ${mysqlContainerName} mysqladmin ping -h localhost --silent && break
-                    echo "MySQL is not ready. Retrying..."
+                    echo "MySQL not ready. Retrying..."
                     sleep 2
                 done || (echo "MySQL did not become ready in time!" && exit 1)
                 """
 
+                // Start application container
                 echo "Starting application container..."
                 sh """
                 docker run --rm -d --name ${appContainerName} \
@@ -341,12 +343,13 @@ environment {
                 echo "Waiting for the application to start..."
                 sh """
                 for i in {1..30}; do
-                    nc -zv localhost 8080 && break
+                    curl -s http://localhost:8080/ && break
                     echo "Application not ready yet. Retrying..."
                     sleep 2
                 done || (echo "Application did not become ready in time!" && exit 1)
                 """
 
+                // Validate application response
                 echo "Validating application response..."
                 sh """
                 response=\$(curl -s http://localhost:8080/ || echo "Error")
@@ -366,8 +369,8 @@ environment {
                 """
             } catch (e) {
                 echo "Dumping logs for debugging..."
-                sh "docker logs ${appContainerName} || true"
-                sh "docker logs ${mysqlContainerName} || true"
+                sh "docker logs ${mysqlContainerName} || echo 'No logs available for ${mysqlContainerName}'"
+                sh "docker logs ${appContainerName} || echo 'No logs available for ${appContainerName}'"
                 throw e
             } finally {
                 echo "Cleaning up Docker containers and network..."
