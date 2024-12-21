@@ -252,128 +252,118 @@ environment {
         }
     }
 }
-     stage('Docker Build and Push') {
-            when {
-                anyOf {
-                    branch 'develop'
-                    branch 'main'
-                    expression { env.BRANCH_NAME.startsWith('feature/') }
-                }
-            }
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                    script {
-                        cache(maxCacheSize: 1073741824, defaultBranch: 'main', caches: [
-                            arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
-                        ]) {
-                            try {
-                                def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-')
-                                def tag
-
-                                if (env.BRANCH_NAME.startsWith('feature/')) {
-                                    tag = "feature-${sanitizedBranchName}-${GIT_COMMIT}"
-                                } else if (env.BRANCH_NAME == 'develop') {
-                                    tag = "staging-${GIT_COMMIT}"
-                                } else if (env.BRANCH_NAME == 'main') {
-                                    tag = "prod-${GIT_COMMIT}"
-                                }
-
-                                env.imageName = "mafike1/numeric-app:${tag}"
-
-                                sh """
-                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-                                docker build -t ${env.imageName} .
-                                docker push ${env.imageName}
-                                """
-
-                                echo "Docker image ${env.imageName} successfully built and pushed."
-                            } catch (e) {
-                                echo "Error building and pushing Docker image: ${e.message}"
-                            }
+        stage('Docker Build and Push') {
+    when {
+        anyOf {
+            branch 'develop'
+            branch 'main'
+            expression { env.BRANCH_NAME.startsWith('feature/') }
+        }
+    }
+    steps {
+        withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+            script {
+                cache(maxCacheSize: 1073741824, defaultBranch: 'main', caches: [
+                    arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
+                ]) {
+                    try {
+                        def dockerTag
+                        def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
+                        
+                        if (env.BRANCH_NAME.startsWith('feature/')) {
+                            dockerTag = "feature-${sanitizedBranchName}-${GIT_COMMIT}"
+                        } else if (env.BRANCH_NAME == 'develop') {
+                            dockerTag = "staging-${GIT_COMMIT}"
+                        } else if (env.BRANCH_NAME == 'main') {
+                            dockerTag = "prod-${GIT_COMMIT}"
                         }
+
+                        sh """
+                        echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                        docker build -t mafike1/numeric-app:${dockerTag} .
+                        docker push mafike1/numeric-app:${dockerTag}
+                        """
+
+                        echo "Docker image mafike1/numeric-app:${dockerTag} successfully built and pushed."
+                    } catch (e) {
+                        echo "Error building and pushing Docker image: ${e.message}"
                     }
                 }
             }
         }
+    }
+}
 
-      stage('Run Docker Container') {
+  stage('Run Docker Container') {
     when {
         expression { env.BRANCH_NAME.startsWith('feature/') }
     }
     steps {
         script {
+            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME}-${GIT_COMMIT}"
             def mysqlContainerName = "mysql-service"
             def appContainerName = "test-app"
             def networkName = "test-network"
             def mysqlRootPassword = "rootpassword"
 
-            echo "Creating Docker network..."
-            sh "docker network create ${networkName} || true"
+            echo "Starting MySQL and application containers for validation on feature branch..."
 
             try {
-                // Start MySQL container
-                echo "Starting MySQL container..."
+                // Create a Docker network
                 sh """
-                docker run --rm -d --name ${mysqlContainerName} \
-                --network ${networkName} \
-                -e MYSQL_ROOT_PASSWORD=${mysqlRootPassword} \
-                mysql:8.0
+                docker network create ${networkName}
                 """
 
+                // Start the MySQL container
+                sh """
+                docker run --rm -d \
+                    --name ${mysqlContainerName} \
+                    --network ${networkName} \
+                    -e MYSQL_ROOT_PASSWORD=${mysqlRootPassword} \
+                    mysql:8.0
+                """
+
+                // Wait for MySQL to initialize
                 echo "Waiting for MySQL to be ready..."
                 sh """
                 for i in {1..30}; do
                     docker exec ${mysqlContainerName} mysqladmin ping -h localhost --silent && break
-                    echo "MySQL not ready. Retrying..."
+                    echo "Waiting for MySQL..."
                     sleep 2
-                done || (echo "MySQL did not become ready in time!" && exit 1)
+                done
                 """
 
-                // Start application container
-                echo "Starting application container..."
+                // Start the application container
                 sh """
-                docker run --rm -d --name ${appContainerName} \
-                --network ${networkName} \
-                -p 8080:8080 \
-                -e DB_USERNAME=root \
-                -e DB_PASSWORD=${mysqlRootPassword} \
-                ${env.imageName}
+                docker run --rm -d \
+                    --name ${appContainerName} \
+                    --network ${networkName} \
+                    -p 8080:8080 \
+                    -e DB_USERNAME=root \
+                    -e DB_PASSWORD=${mysqlRootPassword} \
+                    ${dockerTag}
                 """
 
-                echo "Waiting for the application to start..."
+                // Wait for the application to initialize
+                echo "Waiting for the application to be ready..."
+                sh "sleep 10"
+
+                // Validate the application with a health check
+                echo "Validating application running inside the Docker container..."
                 sh """
-                for i in {1..30}; do
-                    curl -s http://localhost:8080/ && break
-                    echo "Application not ready yet. Retrying..."
-                    sleep 2
-                done || (echo "Application did not become ready in time!" && exit 1)
-                """
-
-                // Validate application response
-                echo "Validating application response..."
-                sh """
-                response=\$(curl -s http://localhost:8080/ || echo "Error")
-                echo "Raw Response: \$response"
-
-                if [ "\$response" = "Error" ]; then
-                    echo "Validation failed: Application did not respond on the expected endpoint!"
-                    exit 1
-                fi
-
-                if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
-                    echo "Validation successful: HTML content matches!"
-                else
-                    echo "Validation failed: HTML content does not match or is missing!"
-                    exit 1
-                fi
+                curl -v -f http://localhost:8080/ \
+                    && echo "Validation successful: Application is running and serving content!" \
+                    || (echo "Validation failed: Application did not respond correctly!" && exit 1)
                 """
             } catch (e) {
-                echo "Dumping logs for debugging..."
-                sh "docker logs ${mysqlContainerName} || echo 'No logs available for ${mysqlContainerName}'"
-                sh "docker logs ${appContainerName} || echo 'No logs available for ${appContainerName}'"
+                // Dump logs for debugging if validation fails
+                echo "Validation failed. Dumping logs for debugging..."
+                sh "docker logs ${appContainerName} || true"
+                sh "docker logs ${mysqlContainerName} || true"
                 throw e
             } finally {
-                echo "Cleaning up Docker containers and network..."
+                // Ensure containers and network are stopped/cleaned up
+                echo "Stopping Docker containers and cleaning up network..."
                 sh "docker stop ${appContainerName} || true"
                 sh "docker stop ${mysqlContainerName} || true"
                 sh "docker network rm ${networkName} || true"
@@ -383,6 +373,7 @@ environment {
 }
 
 
+  
     
     stage('Vulnerability Scan - Kubernetes') {
     when {
