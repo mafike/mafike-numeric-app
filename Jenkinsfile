@@ -54,7 +54,7 @@ environment {
     deploymentName = "devsecops"
     containerName = "devsecops-container"
     serviceName = "devsecops-svc"
-    imageName = "mafike1/numeric-app:${GIT_COMMIT}"
+    imageName = "mafike1/numeric-app:${dockerTag}"
     applicationURL = "http://192.168.33.11"
     applicationURI = "/increment/99"
     NEXUS_VERSION = "nexus3"
@@ -294,7 +294,7 @@ environment {
     }
 }
 
-  stage('Run Docker Container') {
+stage('Run Docker Container') {
     when {
         expression { env.BRANCH_NAME.startsWith('feature/') }
     }
@@ -340,19 +340,23 @@ environment {
                     -p 8080:8080 \
                     -e DB_USERNAME=root \
                     -e DB_PASSWORD=${mysqlRootPassword} \
-                    ${dockerTag}
+                    ${imageName}
                 """
 
                 // Wait for the application to initialize
                 echo "Waiting for the application to be ready..."
-                sh "sleep 10"
+                sh "sleep 20"
 
-                // Validate the application with a health check
+                // Validate the application with a specific HTML check
                 echo "Validating application running inside the Docker container..."
                 sh """
-                curl -v -f http://localhost:8080/ \
-                    && echo "Validation successful: Application is running and serving content!" \
-                    || (echo "Validation failed: Application did not respond correctly!" && exit 1)
+                response=\$(curl -s http://localhost:8080/ || exit 1)
+                if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
+                    echo "Validation successful: HTML content matches!"
+                else
+                    echo "Validation failed: HTML content does not match or is missing!"
+                    exit 1
+                fi
                 """
             } catch (e) {
                 // Dump logs for debugging if validation fails
@@ -370,6 +374,8 @@ environment {
         }
     }
 }
+
+
 
 
   
