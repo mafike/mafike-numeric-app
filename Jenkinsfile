@@ -345,15 +345,20 @@ environment {
 
                 // Wait for the application to start
                 echo "Giving the application time to initialize..."
-                sh "sleep 20"
+                sh "sleep 30"
 
-                // Validate the application
+                // Debug raw response
                 echo "Validating application running inside the Docker container..."
                 sh """
-                response=\$(curl -s http://localhost:8080/)
-                echo \$response | grep -q '<title>' \
-                    && echo "Validation successful: HTML output contains expected content!" \
-                    || (echo "Validation failed: HTML output does not contain expected content!" && exit 1)
+                response=\$(curl -s http://localhost:8080/ || echo "Error")
+                echo "Raw Response: \$response"
+
+                if echo \$response | grep -q '<title>'; then
+                    echo "Validation successful: Application returned expected HTML content!"
+                else
+                    echo "Validation failed: Application did not return expected HTML content!"
+                    exit 1
+                fi
                 """
             } catch (e) {
                 // Dump logs in case of failure
@@ -370,6 +375,7 @@ environment {
         }
     }
 }
+
 
   
     
