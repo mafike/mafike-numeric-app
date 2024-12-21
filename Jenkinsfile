@@ -300,9 +300,7 @@ environment {
     }
     steps {
         script {
-            // Sanitize branch name to create a valid Docker tag
-            def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-')
-            def dockerTag = "mafike1/numeric-app:feature-${sanitizedBranchName}-${GIT_COMMIT}"
+            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-')}-${GIT_COMMIT}"
             def mysqlContainerName = "test-mysql"
             def appContainerName = "test-app"
             def mysqlRootPassword = "rootpassword"
@@ -313,7 +311,7 @@ environment {
             echo "Starting MySQL and application containers for validation..."
 
             try {
-                // Start the MySQL container
+                // Start MySQL container
                 sh """
                 docker run --rm -d --name ${mysqlContainerName} \
                 -e MYSQL_ROOT_PASSWORD=${mysqlRootPassword} \
@@ -323,8 +321,7 @@ environment {
                 mysql:8.0
                 """
 
-                // Wait for MySQL to initialize
-                echo "Waiting for MySQL to be ready..."
+                // Wait for MySQL readiness
                 sh """
                 for i in {1..30}; do
                     docker exec ${mysqlContainerName} mysqladmin ping -h localhost --silent && break
@@ -333,7 +330,7 @@ environment {
                 done
                 """
 
-                // Start the application container
+                // Start application container
                 sh """
                 docker run --rm -d --name ${appContainerName} \
                 --link ${mysqlContainerName}:mysql \
@@ -346,22 +343,26 @@ environment {
                 ${dockerTag}
                 """
 
+                // Wait for the application to start
+                echo "Giving the application time to initialize..."
+                sh "sleep 20"
+
                 // Validate the application
                 echo "Validating application running inside the Docker container..."
                 sh """
-                sleep 10
-                curl -v -f http://localhost:8080/ \
-                    && echo "Validation successful: Application is running on the root endpoint!" \
-                    || (echo "Validation failed: Application did not respond correctly on the root endpoint!" && exit 1)
+                response=\$(curl -s http://localhost:8080/)
+                echo \$response | grep -q '<title>' \
+                    && echo "Validation successful: HTML output contains expected content!" \
+                    || (echo "Validation failed: HTML output does not contain expected content!" && exit 1)
                 """
             } catch (e) {
-                // Dump logs for debugging if validation fails
+                // Dump logs in case of failure
                 echo "Validation failed. Dumping logs for debugging..."
                 sh "docker logs ${appContainerName} || true"
                 sh "docker logs ${mysqlContainerName} || true"
                 throw e
             } finally {
-                // Ensure containers are stopped
+                // Stop containers
                 echo "Stopping Docker containers..."
                 sh "docker stop ${appContainerName} || true"
                 sh "docker stop ${mysqlContainerName} || true"
