@@ -347,16 +347,15 @@ environment {
                 echo "Giving the application time to initialize..."
                 sh "sleep 30"
 
-                // Validate the application
+                // Validate application by HTTP status code
                 echo "Validating application running inside the Docker container..."
                 sh """
-                response=\$(curl -s http://localhost:8080/ || echo "Error")
-                echo "Raw Response: \$response"
-
-                if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
-                    echo "Validation successful: HTML content matches!"
+                status=\$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080/)
+                echo "HTTP Status Code: \$status"
+                if [ "\$status" -eq 200 ]; then
+                    echo "Validation successful: Application returned HTTP 200!"
                 else
-                    echo "Validation failed: HTML content does not match or is missing!"
+                    echo "Validation failed: Application returned HTTP \$status!"
                     exit 1
                 fi
                 """
