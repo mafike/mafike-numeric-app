@@ -300,6 +300,7 @@ environment {
     }
     steps {
         script {
+            def dockerNetworkName = "test-network"
             def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-')}-${GIT_COMMIT}"
             def mysqlContainerName = "test-mysql"
             def appContainerName = "test-app"
@@ -308,12 +309,18 @@ environment {
             def mysqlUser = "testuser"
             def mysqlPassword = "testpassword"
 
-            echo "Starting MySQL and application containers for validation..."
+            echo "Setting up Docker network and running containers for validation..."
 
             try {
-                // Start MySQL container
+                // Create a Docker network
+                sh """
+                docker network create ${dockerNetworkName} || true
+                """
+
+                // Start MySQL container on the custom network
                 sh """
                 docker run --rm -d --name ${mysqlContainerName} \
+                --network ${dockerNetworkName} \
                 -e MYSQL_ROOT_PASSWORD=${mysqlRootPassword} \
                 -e MYSQL_DATABASE=${mysqlDatabase} \
                 -e MYSQL_USER=${mysqlUser} \
@@ -330,12 +337,12 @@ environment {
                 done
                 """
 
-                // Start application container
+                // Start application container on the same network
                 sh """
                 docker run --rm -d --name ${appContainerName} \
-                --link ${mysqlContainerName}:mysql \
+                --network ${dockerNetworkName} \
                 -p 8080:8080 \
-                -e DB_HOST=mysql \
+                -e DB_HOST=${mysqlContainerName} \
                 -e DB_PORT=3306 \
                 -e DB_NAME=${mysqlDatabase} \
                 -e DB_USER=${mysqlUser} \
@@ -345,19 +352,24 @@ environment {
 
                 // Wait for the application to initialize
                 echo "Giving the application time to initialize..."
-                sh "sleep 30"
+                sh "sleep 60"
 
-                // Validate application by HTTP status code
+                // Validate application by HTTP status code with retries
                 echo "Validating application running inside the Docker container..."
                 sh """
-                status=\$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080/)
-                echo "HTTP Status Code: \$status"
-                if [ "\$status" -eq 200 ]; then
-                    echo "Validation successful: Application returned HTTP 200!"
-                else
-                    echo "Validation failed: Application returned HTTP \$status!"
-                    exit 1
-                fi
+                for i in {1..5}; do
+                    status=\$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080/)
+                    echo "HTTP Status Code: \$status"
+                    if [ "\$status" -eq 200 ]; then
+                        echo "Validation successful: Application returned HTTP 200!"
+                        exit 0
+                    fi
+                    echo "Retrying in 10 seconds..."
+                    sleep 10
+                done
+
+                echo "Validation failed: Application did not return HTTP 200 after multiple attempts!"
+                exit 1
                 """
             } catch (e) {
                 // Dump logs in case of failure
@@ -366,18 +378,16 @@ environment {
                 sh "docker logs ${mysqlContainerName} || true"
                 throw e
             } finally {
-                // Stop containers
-                echo "Stopping Docker containers..."
+                // Stop containers and remove the network
+                echo "Stopping Docker containers and cleaning up..."
                 sh "docker stop ${appContainerName} || true"
                 sh "docker stop ${mysqlContainerName} || true"
+                sh "docker network rm ${dockerNetworkName} || true"
             }
         }
     }
 }
 
-
-
-  
     
     stage('Vulnerability Scan - Kubernetes') {
     when {
