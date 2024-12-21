@@ -350,7 +350,7 @@ environment {
                 // Validate the application
                 echo "Validating application running inside the Docker container..."
                 sh """
-                response=\$(curl -s http://localhost:8080/index.html || echo "Error")
+                response=\$(curl -s http://localhost:8080/ || echo "Error")
                 echo "Raw Response: \$response"
 
                 if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
