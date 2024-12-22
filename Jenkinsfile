@@ -346,7 +346,7 @@ environment {
 
                 // Wait for the application to initialize
                 echo "Waiting for the application to be ready..."
-                sh "sleep 30"
+                sh "sleep 60"
 
                 // Validate the application with a specific HTML check
                 echo "Validating application running inside the Docker container..."
