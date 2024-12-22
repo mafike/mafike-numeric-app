@@ -253,7 +253,6 @@ environment {
         }
     }
 } */
-     stages {
         stage('Docker Build and Push') {
             when {
                 anyOf {
@@ -298,7 +297,6 @@ environment {
                 }
             }
         }
-     }
 
   stage('Run Docker Container') {
     when {
