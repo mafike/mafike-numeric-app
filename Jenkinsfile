@@ -303,15 +303,13 @@ environment {
             def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-')}-${GIT_COMMIT}"
             def mysqlContainerName = "mysql-service"
             def appContainerName = "test-app"
-            def networkName = "test-network"
-            def mysqlRootPassword = "rootpassword"
 
             echo "Starting MySQL and application containers for validation on feature branch..."
 
             try {
                 // Create a Docker network
                 sh """
-                docker network create ${networkName}
+                docker network create test-network
                 """
 
                 // Start the MySQL container
@@ -333,8 +331,7 @@ environment {
                 --network test-network \
                 -p 8080:8080 \
                 -e DB_USERNAME=root \
-                -e DB_PASSWORD=rootpassword \
-                    ${dockerTag}
+                -e DB_PASSWORD=rootpassword ${dockerTag}
                 """
                 // Wait for the application to initialize
                 echo "Waiting for the application to be ready..."
@@ -343,7 +340,7 @@ environment {
                 // Validate the application with a specific HTML check
                 echo "Validating application running inside the Docker container..."
                 sh """
-                response=\$(curl -s http://192.168.33.10:8080/ || exit 1)
+                response=\$(curl -s http://localhost:8080/ || exit 1)
                 if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
                     echo "Validation successful: HTML content matches!"
                 else
