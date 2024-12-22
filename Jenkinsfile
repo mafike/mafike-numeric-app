@@ -253,7 +253,7 @@ environment {
         }
     }
 }
-     stage('Docker Build and Push') {
+    stage('Docker Build and Push') {
     when {
         anyOf {
             branch 'develop'
@@ -276,26 +276,18 @@ environment {
                             dockerTag = "prod-${GIT_COMMIT}"
                         }
 
+                        // Build the Docker image
                         sh """
                         echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
                         docker build -t mafike1/numeric-app:${dockerTag} .
                         """
 
-                        // Push the image only for the main branch
-                        if (env.BRANCH_NAME == 'main') {
+                        // Push the Docker image
+                        if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'develop') {
                             sh """
                             docker push mafike1/numeric-app:${dockerTag}
                             """
                             echo "Docker image mafike1/numeric-app:${dockerTag} successfully pushed."
-                        }
-                        elif (env.BRANCH_NAME) == 'develop' {
-                            sh """
-                               docker push mafike1/numeric-app:${dockerTag}
-                               """
-                               echo "Docker image mafike1/numeric-app:${dockerTag} successfully pushed."
-                        }
-                         else {
-                            echo "Docker image built but not pushed for branch: ${env.BRANCH_NAME}"
                         }
                     } catch (e) {
                         echo "Error building and pushing Docker image: ${e.message}"
@@ -305,6 +297,7 @@ environment {
         }
     }
 }
+
 
 /*
    stage('Run Docker Container') {
