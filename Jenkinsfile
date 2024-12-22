@@ -360,14 +360,17 @@ stage('Run Docker Container') {
                 // Validate the application with a specific HTML check
                 echo "Validating application running inside the Docker container..."
                 sh """
-                response=$(curl -s http://localhost:8080/ || exit 1)
-                if echo $response | grep -q '<title>Welcome to My DevOps Project</title>'; then
+                response=\$(curl -s http://localhost:8080/ || { echo 'Error: Application endpoint is not reachable'; exit 1; })
+                if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
                     echo "Validation successful: HTML content matches!"
                 else
                     echo "Validation failed: HTML content does not match or is missing!"
+                    echo "Received response:"
+                    echo "\$response"
                     exit 1
                 fi
                 """
+
             } catch (e) {
                 // Dump logs for debugging if validation fails
                 echo "Validation failed. Dumping logs for debugging..."
