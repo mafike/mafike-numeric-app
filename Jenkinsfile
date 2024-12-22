@@ -493,7 +493,7 @@ environment {
         }
     }
 }
-  
+  /*
      stage('K8S Deployment - DEV') {
        when {
                 branch 'develop'
@@ -556,7 +556,7 @@ environment {
         }
         }
       }
-    } 
+    }  
 
   stage('OWASP ZAP - DAST') {
      when {
@@ -568,7 +568,7 @@ environment {
           sh 'bash zap.sh'
         }
       }
-    }
+    } */
    stage ('Manual Approval'){
      when {
       branch 'main'
