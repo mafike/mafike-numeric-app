@@ -54,7 +54,8 @@ environment {
     deploymentName = "devsecops"
     containerName = "devsecops-container"
     serviceName = "devsecops-svc"
-    imageName = "mafike1/numeric-app:${GIT_COMMIT}"
+    imageName = "mafike1/numeric-app:prod-${GIT_COMMIT}"
+    SimageName = "mafike1/numeric-app:staging-${GIT_COMMIT}"
     applicationURL = "http://192.168.33.11"
     applicationURI = "/increment/99"
     NEXUS_VERSION = "nexus3"
@@ -426,7 +427,7 @@ environment {
    /*stage('Kubernetes Deployment - DEV') {
       steps {
         withKubeConfig([credentialsId: 'kubeconfig']) {
-          sh "sed -i 's#replace#mafike1/numeric-app:${GIT_COMMIT}#g' k8s_deployment_service.yaml"
+          sh "sed -i 's#replace#mafike1/numeric-app:staging-${GIT_COMMIT}#g' k8s_deployment_service.yaml"
           sh "kubectl apply -f k8s_deployment_service.yaml --validate=false"
         }
       }

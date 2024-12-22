@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Print the image name
-echo "Scanning image: $imageName"
+echo "Scanning image: $SimageName"
 
 # Verify the Docker daemon is accessible
 if ! docker info >/dev/null 2>&1; then
@@ -10,8 +10,8 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # Ensure the image exists in the registry
-if ! docker pull "$imageName"; then
-    echo "Error: Image '$imageName' not found in the registry. Ensure it is pushed correctly."
+if ! docker pull "$SimageName"; then
+    echo "Error: Image '$SimageName' not found in the registry. Ensure it is pushed correctly."
     exit 1
 fi
 
@@ -22,7 +22,7 @@ docker run --rm \
   aquasec/trivy:0.17.2 -q image \
   --skip-update \
   --severity LOW,MEDIUM,HIGH,CRITICAL \
-  --light "$imageName"
+  --light "$SimageName"
 
 # Capture the exit code
 exit_code=$?
