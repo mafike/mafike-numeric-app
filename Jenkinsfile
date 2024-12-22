@@ -293,7 +293,7 @@ environment {
         }
     }
 }
-
+/*
    stage('Run Docker Container') {
     when {
         expression { env.BRANCH_NAME.startsWith('feature/') }
@@ -371,7 +371,7 @@ environment {
     }
 }
 
-  
+  */
     
     stage('Vulnerability Scan - Kubernetes') {
     when {
