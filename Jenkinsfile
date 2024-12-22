@@ -323,7 +323,12 @@ environment {
 
                 // Wait for MySQL to initialize
                 echo "Waiting for MySQL to be ready..."
-                sh "sleep 10"                
+                for i in {1..30}; do
+                    docker exec mysql-service mysqladmin ping -h localhost --silent && break
+                    echo "Waiting for MySQL..."
+                    sleep 2
+                done
+                
                 // Start the application container
                 sh """
                 docker run --rm -d \
@@ -331,7 +336,7 @@ environment {
                 --network test-network \
                 -p 8080:8080 \
                 -e DB_USERNAME=root \
-                -e DB_PASSWORD=rootpassword ${dockerTag}
+                -e DB_PASSWORD=rootpassword  ${dockerTag}
                 """
                 // Wait for the application to initialize
                 echo "Waiting for the application to be ready..."
