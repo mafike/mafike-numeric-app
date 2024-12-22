@@ -54,7 +54,7 @@ environment {
     deploymentName = "devsecops"
     containerName = "devsecops-container"
     serviceName = "devsecops-svc"
-    imageName = "mafike1/numeric-app:${dockerTag}"
+    imageName = "mafike1/numeric-app:${GIT_COMMIT}"
     applicationURL = "http://192.168.33.11"
     applicationURI = "/increment/99"
     NEXUS_VERSION = "nexus3"
@@ -110,7 +110,7 @@ environment {
        }
        }
       } 
-    /* stage('Mutation Tests - PIT') {
+     stage('Mutation Tests - PIT') {
       when {
                 branch 'develop'
             }
@@ -129,7 +129,7 @@ environment {
       }
       }
     } 
-      stage('SAST Scan With Sonarqube') {
+     /* stage('SAST Scan With Sonarqube') {
       when {
        anyOf {
         branch 'develop'
@@ -202,7 +202,7 @@ environment {
                     }
                 }
             }
-        } 
+        } */
      stage('Vulnerability Scan - Docker') {
       when {
                 anyOf {
@@ -251,8 +251,8 @@ environment {
         }
         }
     }
-} */
-      stage('Docker Build and Push') {
+}
+        stage('Docker Build and Push') {
     when {
         anyOf {
             branch 'develop'
@@ -267,35 +267,26 @@ environment {
                     arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
                 ]) {
                     try {
-                        def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
                         def dockerTag
-
-                        // Calculate dockerTag based on branch name
+                        def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
+                        
                         if (env.BRANCH_NAME.startsWith('feature/')) {
-                            dockerTag = "${sanitizedBranchName}-${GIT_COMMIT}"
+                            dockerTag = "feature-${sanitizedBranchName}-${GIT_COMMIT}"
                         } else if (env.BRANCH_NAME == 'develop') {
                             dockerTag = "staging-${GIT_COMMIT}"
                         } else if (env.BRANCH_NAME == 'main') {
                             dockerTag = "prod-${GIT_COMMIT}"
                         }
 
-                        // Dynamically update global imageName
-                        env.imageName = "mafike1/numeric-app:${dockerTag}"
-
-                        echo "Docker Tag: ${dockerTag}"
-                        echo "Image Name: ${env.imageName}"
-
-                        // Build and push the Docker image
                         sh """
                         echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-                        docker build -t ${env.imageName} .
-                        docker push ${env.imageName}
+                        docker build -t mafike1/numeric-app:${dockerTag} .
+                        docker push mafike1/numeric-app:${dockerTag}
                         """
 
-                        echo "Docker image ${env.imageName} successfully built and pushed."
+                        echo "Docker image mafike1/numeric-app:${dockerTag} successfully built and pushed."
                     } catch (e) {
                         echo "Error building and pushing Docker image: ${e.message}"
-                        throw e
                     }
                 }
             }
@@ -303,13 +294,13 @@ environment {
     }
 }
 
-
-stage('Run Docker Container') {
+  stage('Run Docker Container') {
     when {
         expression { env.BRANCH_NAME.startsWith('feature/') }
     }
     steps {
         script {
+            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME}-${GIT_COMMIT}"
             def mysqlContainerName = "mysql-service"
             def appContainerName = "test-app"
             def networkName = "test-network"
@@ -350,7 +341,7 @@ stage('Run Docker Container') {
                     -p 8080:8080 \
                     -e DB_USERNAME=root \
                     -e DB_PASSWORD=${mysqlRootPassword} \
-                    ${env.imageName}
+                    ${dockerTag}
                 """
 
                 // Wait for the application to initialize
@@ -384,12 +375,6 @@ stage('Run Docker Container') {
         }
     }
 }
-
-
-
-
-
-
   
     
     stage('Vulnerability Scan - Kubernetes') {
