@@ -287,6 +287,11 @@ environment {
                             docker push mafike1/numeric-app:${dockerTag}
                             """
                             echo "Docker image mafike1/numeric-app:${dockerTag} successfully pushed."
+                        elif (env.BRANCH_NAME) == 'develop' {
+                            sh """
+                               docker push mafike1/numeric-app:${dockerTag}
+                               """
+                        }
                         } else {
                             echo "Docker image built but not pushed for branch: ${env.BRANCH_NAME}"
                         }
