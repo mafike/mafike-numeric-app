@@ -714,47 +714,42 @@ environment {
             try {
                 env.failedStage = "none"
                 env.emoji = ":white_check_mark: :tada: :thumbsup_all:"
-                sendNotification currentBuild.result
-            } catch (e) {
-                echo "Error sending success notification: ${e.message}"
-            }
-            // Confirmation for Feature Branch
-            if (env.BRANCH_NAME.startsWith('feature/')) {
-                echo "Feature branch ${env.BRANCH_NAME} pipeline passed. Confirming readiness for merging..."
-                timeout(time: 1, unit: 'HOURS') {
-                    input message: "Feature branch ${env.BRANCH_NAME} passed all checks. Approve merging to develop?"
-                }
-            }
+                sendNotification(currentBuild.result) // Using original working notification
 
-            // Automerge Logic with Conflict Resolution
-            try {
+                // Add feature branch confirmation and automerge logic
                 if (env.BRANCH_NAME.startsWith('feature/')) {
+                    echo "Feature branch ${env.BRANCH_NAME} pipeline passed. Confirming readiness for merging..."
+                    timeout(time: 1, unit: 'HOURS') {
+                        input message: "Feature branch ${env.BRANCH_NAME} passed all checks. Approve merging to develop?"
+                    }
+
                     echo "Attempting to merge feature branch into develop"
                     sh '''
                     git config --global user.email "jenkins@example.com"
                     git config --global user.name "Jenkins"
                     git config rerere.enabled true
+                    git fetch origin
                     git checkout develop
                     git merge ${env.BRANCH_NAME}
                     git push origin develop
                     '''
-                    sendNotification('SUCCESS') // Notify Slack about the successful merge
                 } else if (env.BRANCH_NAME == 'develop') {
                     echo "Attempting to merge develop branch into main"
                     sh '''
                     git config --global user.email "jenkins@example.com"
                     git config --global user.name "Jenkins"
                     git config rerere.enabled true
+                    git fetch origin
                     git checkout main
-                    git merge develop
+                    git merge origin/develop
                     git push origin main
                     '''
-                    sendNotification('SUCCESS') // Notify Slack about the successful merge
                 }
+
             } catch (e) {
-                echo "Error during automerge: ${e.message}"
-                env.failedStage = "Automerge"
-                sendNotification('FAILURE') // Notify Slack about the failure
+                echo "Error during success logic or automerge: ${e.message}"
+                env.failedStage = "Automerge" // Mark failure in Slack if automerge fails
+                sendNotification('FAILURE')
             }
         }
     }
@@ -762,11 +757,11 @@ environment {
     failure {
         script {
             try {
-                def failedStages = getFailedStages(currentBuild)
+                def failedStages = getFailedStages(currentBuild) // Fetch failed stages
                 env.failedStage = failedStages.failedStageName
                 echo "Failed Stage: ${env.failedStage}"
                 env.emoji = ":x: :red_circle: :sos:"
-                sendNotification currentBuild.result
+                sendNotification(currentBuild.result) // Send failure notification
             } catch (e) {
                 echo "Error fetching failed stages or sending failure notification: ${e.message}"
             }
@@ -774,5 +769,3 @@ environment {
     }
 }
 }
-
-
