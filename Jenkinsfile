@@ -360,7 +360,7 @@ stage('Run Docker Container') {
                 // Validate the application with a specific HTML check
                 echo "Validating application running inside the Docker container..."
                 sh """
-                response=\$(curl -s http://localhost:8080/ || exit 1)
+                response=\$(curl -s http://localhost:8080/ )
                 if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
                     echo "Validation successful: HTML content matches!"
                 else
@@ -379,7 +379,7 @@ stage('Run Docker Container') {
                 echo "Stopping Docker containers and cleaning up network..."
                 sh "docker stop ${appContainerName} || true"
                 sh "docker stop ${mysqlContainerName} || true"
-                sh "docker network rm ${networkName} || true"
+                sh "docker network rm ${networkName}"
             }
         }
     }
