@@ -322,12 +322,13 @@ environment {
                 """
 
                 // Wait for MySQL to initialize
-                echo "Waiting for MySQL to be ready..."
+                sh """
                 for i in {1..30}; do
-                    docker exec mysql-service mysqladmin ping -h localhost --silent && break
+                    docker exec ${mysqlContainerName} mysqladmin ping -h localhost --silent && break
                     echo "Waiting for MySQL..."
                     sleep 2
                 done
+                """
                 
                 // Start the application container
                 sh """
