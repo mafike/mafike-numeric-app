@@ -54,7 +54,8 @@ environment {
     deploymentName = "devsecops"
     containerName = "devsecops-container"
     serviceName = "devsecops-svc"
-    imageName = "mafike1/numeric-app:${GIT_COMMIT}"
+    imageName = "mafike1/numeric-app:prod-${GIT_COMMIT}"
+    SimageName = "mafike1/numeric-app:staging-${GIT_COMMIT}"
     applicationURL = "http://192.168.33.11"
     applicationURI = "/increment/99"
     NEXUS_VERSION = "nexus3"
@@ -67,12 +68,6 @@ environment {
 }
 
   stages {
-     stage('Clean Up Workspace'){
-            steps{
-                cleanWs()
-            }
-        }
-
      stage('Build my Artifact') {
             when {
               anyOf {
@@ -167,7 +162,7 @@ environment {
       }
       }
        } 
-      } */
+      } 
 
      stage("Publish to Nexus Repository Manager") {
       when {
@@ -208,7 +203,7 @@ environment {
                     }
                 }
             }
-        }
+        } */
      stage('Vulnerability Scan - Docker') {
       when {
                 anyOf {
@@ -258,83 +253,131 @@ environment {
         }
     }
 }
-        stage('Docker Build and Push') {
-           when {
-                anyOf {
-                    branch 'develop'
-                    branch 'main'
-                    expression { env.BRANCH_NAME.startsWith('feature/') }
-                }
-            }
-            steps {
-                // Use withCredentials to access Docker credentials
-                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                    script {
-                      cache(maxCacheSize: 1073741824, defaultBranch: 'main', caches: [
-                        arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
-                    ]) {
-                      try {
+    stage('Docker Build and Push') {
+    when {
+        anyOf {
+            branch 'develop'
+            branch 'main'
+        }
+    }
+    steps {
+        withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+            script {
+                cache(maxCacheSize: 1073741824, defaultBranch: 'main', caches: [
+                    arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
+                ]) {
+                    try {
                         def dockerTag
-                           if (env.BRANCH_NAME.startsWith('feature/')) {
-                           dockerTag = "feature-${env.BRANCH_NAME}-${GIT_COMMIT}"
-                           } else if (env.BRANCH_NAME == 'develop') {
-                           dockerTag = "staging-${GIT_COMMIT}"
-                           } else if (env.BRANCH_NAME == 'main') {
-                          dockerTag = "prod-${GIT_COMMIT}"
-                      }
+                        def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
+                        
+                        if (env.BRANCH_NAME == 'develop') {
+                            dockerTag = "staging-${GIT_COMMIT}"
+                        } else if (env.BRANCH_NAME == 'main') {
+                            dockerTag = "prod-${GIT_COMMIT}"
+                        }
 
-                   sh "echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin"
-                   sh "docker build -t mafike1/numeric-app:${dockerTag} ."
-                   sh "docker push mafike1/numeric-app:${dockerTag}"
+                        // Build the Docker image
+                        sh """
+                        echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                        docker build -t mafike1/numeric-app:${dockerTag} .
+                        """
 
-                   echo "Docker image mafike1/numeric-app:${dockerTag} successfully built and pushed."
+                        // Push the Docker image
+                        if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'develop') {
+                            sh """
+                            docker push mafike1/numeric-app:${dockerTag}
+                            """
+                            echo "Docker image mafike1/numeric-app:${dockerTag} successfully pushed."
+                        }
+                    } catch (e) {
+                        echo "Error building and pushing Docker image: ${e.message}"
                     }
-                    catch (e) {
-                      echo "Error building and pushing Docker image: ${e.message}"
-                      }
                 }
             }
-           }
-        }  
-      }
-    stage('Run Docker Container') {
+        }
+    }
+}
+
+
+/*
+   stage('Run Docker Container') {
     when {
         expression { env.BRANCH_NAME.startsWith('feature/') }
     }
     steps {
         script {
-            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME}-${GIT_COMMIT}"
+            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-')}-${GIT_COMMIT}"
+            def mysqlContainerName = "mysql-service"
+            def appContainerName = "test-app"
 
-            echo "Running Docker container for validation on feature branch with image: ${dockerTag}"
+            echo "Starting MySQL and application containers for validation on feature branch..."
 
             try {
-                // Start the Docker container
+                // Create a Docker network
                 sh """
-                docker run --rm -d --name test-container -p 8080:8080 ${dockerTag}
-                sleep 10
+                docker network create test-network
                 """
 
-                // Validate the application using the root endpoint
+                // Start the MySQL container
+                sh """
+                docker run --rm -d \
+                --name mysql-service \
+                --network test-network \
+                -e MYSQL_ROOT_PASSWORD=rootpassword \
+                mysql:8.0
+                """
+
+                // Wait for MySQL to initialize
+                sh """
+                for i in {1..30}; do
+                    docker exec ${mysqlContainerName} mysqladmin ping -h localhost --silent && break
+                    echo "Waiting for MySQL..."
+                    sleep 2
+                done
+                """
+                
+                // Start the application container
+                sh """
+                docker run --rm -d \
+                --name test-app \
+                --network test-network \
+                -p 8080:8080 \
+                -e DB_USERNAME=root \
+                -e DB_PASSWORD=rootpassword  ${dockerTag}
+                """
+                // Wait for the application to initialize
+                echo "Waiting for the application to be ready..."
+                sh "sleep 120"
+
+                // Validate the application with a specific HTML check
                 echo "Validating application running inside the Docker container..."
                 sh """
-                curl -v -f http://localhost:8080/ \
-                    && echo "Validation successful: Application is running on the root endpoint!" \
-                    || (echo "Validation failed: Application did not respond correctly on the root endpoint!" && exit 1)
+                response=\$(curl -s http://localhost:8080/ || exit 1)
+                if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
+                    echo "Validation successful: HTML content matches!"
+                else
+                    echo "Validation failed: HTML content does not match or is missing!"
+                    exit 1
+                fi
                 """
             } catch (e) {
-                // Dump container logs in case of failure for debugging
-                echo "Validation failed. Dumping container logs for debugging..."
-                sh "docker logs test-container || true"
+                // Dump logs for debugging if validation fails
+                echo "Validation failed. Dumping logs for debugging..."
+                sh "docker logs ${appContainerName} || true"
+                sh "docker logs ${mysqlContainerName} || true"
                 throw e
             } finally {
-                // Stop the container even if validation fails
-                echo "Stopping the Docker container..."
-                sh "docker stop test-container || true"
+                // Ensure containers and network are stopped/cleaned up
+                echo "Stopping Docker containers and cleaning up network..."
+                sh "docker stop ${appContainerName} || true"
+                sh "docker stop ${mysqlContainerName} || true"
+                sh "docker network rm ${networkName} "
             }
         }
     }
 }
-  
+
+  */
     
     stage('Vulnerability Scan - Kubernetes') {
     when {
@@ -384,11 +427,11 @@ environment {
    /*stage('Kubernetes Deployment - DEV') {
       steps {
         withKubeConfig([credentialsId: 'kubeconfig']) {
-          sh "sed -i 's#replace#mafike1/numeric-app:${GIT_COMMIT}#g' k8s_deployment_service.yaml"
+          sh "sed -i 's#replace#mafike1/numeric-app:staging-${GIT_COMMIT}#g' k8s_deployment_service.yaml"
           sh "kubectl apply -f k8s_deployment_service.yaml --validate=false"
         }
       }
-    } */
+    } 
      stage('Scale Up Spot Node Group') {
         when {
                 branch 'develop'
@@ -403,7 +446,7 @@ environment {
                     '''
                 }
             }
-        }
+        } */
     stage('Run CIS Benchmark') {
     when {
         anyOf {
@@ -450,7 +493,7 @@ environment {
         }
     }
 }
-  
+  /*
      stage('K8S Deployment - DEV') {
        when {
                 branch 'develop'
@@ -513,7 +556,7 @@ environment {
         }
         }
       }
-    } 
+    }  
 
   stage('OWASP ZAP - DAST') {
      when {
@@ -525,39 +568,18 @@ environment {
           sh 'bash zap.sh'
         }
       }
-    }
+    } */
    stage ('Manual Approval'){
      when {
       branch 'main'
      }
-
-          steps {
-           script {
-             timeout(time: 2, unit: 'DAYS') {
-              def approvalMailContent = """
-              Project: ${env.JOB_NAME}
-              Build Number: ${env.BUILD_NUMBER}
-              Do you want to Approve the Deployment to Production Environment/Namespace?
-              Please go to build URL and approve the deployment request.
-              URL de build: ${env.BUILD_URL}
-              """
-             mail(
-             to: '04_bronze.squirm@icloud.com',
-             subject: "${currentBuild.result} CI: Project name -> ${env.JOB_NAME}", 
-             body: approvalMailContent,
-             mimeType: 'text/plain'
-             )
-            input(
-            id: "DeployGate",
-            message: "Deploy ${params.project_name}?",
-            submitter: "approver",
-            parameters: [choice(name: 'action', choices: ['Deploy'], description: 'Approve deployment')]
-            )  
-          }
-         }
-       }
+    steps {
+     timeout(time: 2, unit: 'DAYS') {
+      input 'Do you want to Approve the Deployment to Production Environment/Namespace?'
     }
-   stage('Scale Down Spot Node Group') {
+   }
+    }
+  /* stage('Scale Down Spot Node Group') {
      when {
       branch 'main'
     }
@@ -573,7 +595,7 @@ environment {
                 }
             }
         }
-
+ */
    stage('K8S Deployment - PROD') {
     when {
       branch 'main'
@@ -632,16 +654,59 @@ environment {
     }
   }
     post {
-     always {
-      // Publish JUnit test results
-       junit 'target/surefire-reports/*.xml'
-      // Record code coverage using the Coverage Plugin
-      recordCoverage enabledForFailure: true, qualityGates: [[criticality: 'NOTE', integerThreshold: 60, metric: 'MODULE', threshold: 60.0]], tools: [[pattern: 'target/site/jacoco/jacoco.xml'], [parser: 'JUNIT', pattern: 'target/surefire-reports/*.xml']]
-      pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-      dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
-      publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'owasp-zap-report', reportFiles: 'zap_report.html', reportName: 'OWASP ZAP HTML Report', reportTitles: 'OWASP ZAP HTML Report'])
-      publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: '.', reportFiles: 'kube-bench-combined-report.html', reportName: 'Kube-Bench HTML Report', reportTitles: 'Kube-Bench HTML Report'])
-     }
+    always {
+        script {
+            // Publish JUnit test results if they exist
+            if (fileExists('target/surefire-reports/*.xml')) {
+                echo "Publishing JUnit test results..."
+                junit 'target/surefire-reports/*.xml'
+            } else {
+                echo "JUnit test results not found. Skipping..."
+            }
+
+            // Record code coverage if the coverage report exists
+            if (fileExists('target/site/jacoco/jacoco.xml')) {
+                echo "Recording code coverage..."
+                recordCoverage enabledForFailure: true, 
+                    qualityGates: [[criticality: 'NOTE', integerThreshold: 60, metric: 'MODULE', threshold: 60.0]], 
+                    tools: [[pattern: 'target/site/jacoco/jacoco.xml'], [parser: 'JUNIT', pattern: 'target/surefire-reports/*.xml']]
+            } else {
+                echo "Code coverage report not found. Skipping..."
+            }
+
+            // Publish PIT mutation report if it exists
+            if (fileExists('**/target/pit-reports/**/mutations.xml')) {
+                echo "Publishing PIT mutation results..."
+                pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
+            } else {
+                echo "PIT mutation results not found. Skipping..."
+            }
+
+            // Publish Dependency Check report if it exists
+            if (fileExists('target/dependency-check-report.xml')) {
+                echo "Publishing Dependency Check report..."
+                dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
+            } else {
+                echo "Dependency Check report not found. Skipping..."
+            }
+
+            // Publish OWASP ZAP report if it exists
+            if (fileExists('owasp-zap-report/zap_report.html')) {
+                echo "Publishing OWASP ZAP HTML report..."
+                publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'owasp-zap-report', reportFiles: 'zap_report.html', reportName: 'OWASP ZAP HTML Report'])
+            } else {
+                echo "OWASP ZAP HTML report not found. Skipping..."
+            }
+
+            // Publish Kube-Bench report if it exists
+            if (fileExists('kube-bench-combined-report.html')) {
+                echo "Publishing Kube-Bench HTML report..."
+                publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: '.', reportFiles: 'kube-bench-combined-report.html', reportName: 'Kube-Bench HTML Report'])
+            } else {
+                echo "Kube-Bench HTML report not found. Skipping..."
+            }
+        }
+    }
     
     
    success {
@@ -649,47 +714,42 @@ environment {
             try {
                 env.failedStage = "none"
                 env.emoji = ":white_check_mark: :tada: :thumbsup_all:"
-                sendNotification currentBuild.result
-            } catch (e) {
-                echo "Error sending success notification: ${e.message}"
-            }
-            // Confirmation for Feature Branch
-            if (env.BRANCH_NAME.startsWith('feature/')) {
-                echo "Feature branch ${env.BRANCH_NAME} pipeline passed. Confirming readiness for merging..."
-                timeout(time: 1, unit: 'HOURS') {
-                    input message: "Feature branch ${env.BRANCH_NAME} passed all checks. Approve merging to develop?"
-                }
-            }
+                sendNotification(currentBuild.result) // Using original working notification
 
-            // Automerge Logic with Conflict Resolution
-            try {
+                // Add feature branch confirmation and automerge logic
                 if (env.BRANCH_NAME.startsWith('feature/')) {
+                    echo "Feature branch ${env.BRANCH_NAME} pipeline passed. Confirming readiness for merging..."
+                    timeout(time: 1, unit: 'HOURS') {
+                        input message: "Feature branch ${env.BRANCH_NAME} passed all checks. Approve merging to develop?"
+                    }
+
                     echo "Attempting to merge feature branch into develop"
                     sh '''
                     git config --global user.email "jenkins@example.com"
                     git config --global user.name "Jenkins"
                     git config rerere.enabled true
+                    git fetch origin
                     git checkout develop
                     git merge ${env.BRANCH_NAME}
                     git push origin develop
                     '''
-                    sendNotification('SUCCESS') // Notify Slack about the successful merge
                 } else if (env.BRANCH_NAME == 'develop') {
                     echo "Attempting to merge develop branch into main"
                     sh '''
                     git config --global user.email "jenkins@example.com"
                     git config --global user.name "Jenkins"
                     git config rerere.enabled true
+                    git fetch origin
                     git checkout main
-                    git merge develop
+                    git merge origin/develop
                     git push origin main
                     '''
-                    sendNotification('SUCCESS') // Notify Slack about the successful merge
                 }
+
             } catch (e) {
-                echo "Error during automerge: ${e.message}"
-                env.failedStage = "Automerge"
-                sendNotification('FAILURE') // Notify Slack about the failure
+                echo "Error during success logic or automerge: ${e.message}"
+                env.failedStage = "Automerge" // Mark failure in Slack if automerge fails
+                sendNotification('FAILURE')
             }
         }
     }
@@ -697,11 +757,11 @@ environment {
     failure {
         script {
             try {
-                def failedStages = getFailedStages(currentBuild)
+                def failedStages = getFailedStages(currentBuild) // Fetch failed stages
                 env.failedStage = failedStages.failedStageName
                 echo "Failed Stage: ${env.failedStage}"
                 env.emoji = ":x: :red_circle: :sos:"
-                sendNotification currentBuild.result
+                sendNotification(currentBuild.result) // Send failure notification
             } catch (e) {
                 echo "Error fetching failed stages or sending failure notification: ${e.message}"
             }
@@ -709,5 +769,3 @@ environment {
     }
 }
 }
-
-

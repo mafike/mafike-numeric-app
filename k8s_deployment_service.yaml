@@ -5,7 +5,7 @@ metadata:
     app: devsecops
   name: devsecops
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: devsecops
@@ -22,6 +22,20 @@ spec:
       containers:
       - image: replace
         name: devsecops-container
+        env:
+        - name: DB_PASSWORD
+          value: rootpassword 
+        - name: MYSQL_DATABASE
+          value: devsecopsdb
+        - name: DB_USERNAME
+          value: root
+        resources:
+         requests:
+          memory: "256Mi"
+          cpu: "200m"
+         limits:
+          memory: "512Mi"
+          cpu: "500m"  
         volumeMounts:
         - mountPath: /tmp
           name: vol
@@ -29,19 +43,6 @@ spec:
           runAsNonRoot: true
           runAsUser: 100
           readOnlyRootFilesystem: true
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: type
-                operator: In
-                values:
-                - "spot"
-              - key: lifecycle
-                operator: In
-                values:
-                - "spot"
 ---
 apiVersion: v1
 kind: Service
