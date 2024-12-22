@@ -344,7 +344,7 @@ environment {
                     -p 8080:8080 \
                     -e DB_USERNAME=root \
                     -e DB_PASSWORD=${mysqlRootPassword} \
-                    ${imageName}
+                    ${env.imageName}
                 """
 
                 // Wait for the application to initialize
