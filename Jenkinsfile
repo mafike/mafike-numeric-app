@@ -109,7 +109,7 @@ environment {
        }
        }
        }
-      } 
+      } /*
      stage('Mutation Tests - PIT') {
       when {
                 branch 'develop'
@@ -129,7 +129,7 @@ environment {
       }
       }
     } 
-     /* stage('SAST Scan With Sonarqube') {
+      stage('SAST Scan With Sonarqube') {
       when {
        anyOf {
         branch 'develop'
@@ -202,7 +202,7 @@ environment {
                     }
                 }
             }
-        } */
+        } 
      stage('Vulnerability Scan - Docker') {
       when {
                 anyOf {
@@ -251,7 +251,7 @@ environment {
         }
         }
     }
-}
+} */
         stage('Docker Build and Push') {
     when {
         anyOf {
