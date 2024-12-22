@@ -55,7 +55,7 @@ environment {
     containerName = "devsecops-container"
     serviceName = "devsecops-svc"
     dockerTag = "" // Will be dynamically updated
-    imageName = "mafike1/numeric-app:${dockerTag}"
+    imageName = ""
     applicationURL = "http://192.168.33.11"
     applicationURI = "/increment/99"
     NEXUS_VERSION = "nexus3"
@@ -253,7 +253,8 @@ environment {
         }
     }
 } */
-     stage('Docker Build and Push') {
+     stages {
+        stage('Docker Build and Push') {
             when {
                 anyOf {
                     branch 'develop'
@@ -268,9 +269,9 @@ environment {
                             arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
                         ]) {
                             try {
-                                // Determine the tag dynamically
                                 def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
                                 
+                                // Determine dockerTag based on branch name
                                 if (env.BRANCH_NAME.startsWith('feature/')) {
                                     env.dockerTag = "feature-${sanitizedBranchName}-${GIT_COMMIT}"
                                 } else if (env.BRANCH_NAME == 'develop') {
@@ -279,7 +280,7 @@ environment {
                                     env.dockerTag = "prod-${GIT_COMMIT}"
                                 }
 
-                                // Use dynamically updated imageName
+                                // Dynamically set imageName after dockerTag is set
                                 env.imageName = "mafike1/numeric-app:${dockerTag}"
 
                                 sh """
@@ -297,6 +298,7 @@ environment {
                 }
             }
         }
+     }
 
   stage('Run Docker Container') {
     when {
