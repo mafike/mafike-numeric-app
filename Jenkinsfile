@@ -767,10 +767,11 @@ environment {
             echo "Error during success logic or automerge: ${e.message}"
             env.failedStage = "Automerge"
             env.emoji = ":x: :red_circle: :sos:"
-            sendNotification('FAILURE') // Notify Slack of failure during automerge
+            sendNotification(currentBuild.result) // Notify Slack of failure during automerge
         }
     }
 }
+
 
 
     failure {
