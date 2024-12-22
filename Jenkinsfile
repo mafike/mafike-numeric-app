@@ -55,7 +55,7 @@ environment {
     containerName = "devsecops-container"
     serviceName = "devsecops-svc"
     dockerTag = "" // Will be dynamically updated
-    imageName = ""
+    imageName = "mafike1/numeric-app:${env.dockerTag}"
     applicationURL = "http://192.168.33.11"
     applicationURI = "/increment/99"
     NEXUS_VERSION = "nexus3"
@@ -253,7 +253,7 @@ environment {
         }
     }
 } */
-        stage('Docker Build and Push') {
+      stage('Docker Build and Push') {
             when {
                 anyOf {
                     branch 'develop'
@@ -278,6 +278,9 @@ environment {
                         // Update imageName using dockerTag
                         env.imageName = "mafike1/numeric-app:${env.dockerTag}"
 
+                        echo "Building and pushing Docker image: ${env.imageName}"
+
+                        // Build and push the Docker image
                         sh """
                         echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
                         docker build -t ${env.imageName} .
