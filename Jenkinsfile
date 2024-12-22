@@ -338,12 +338,12 @@ environment {
                 """
                 // Wait for the application to initialize
                 echo "Waiting for the application to be ready..."
-                sh "sleep 60"
+                sh "sleep 120"
 
                 // Validate the application with a specific HTML check
                 echo "Validating application running inside the Docker container..."
                 sh """
-                response=\$(curl -s http://localhost:8080/ || exit 1)
+                response=\$(curl -s http://192.168.33.10:8080/ || exit 1)
                 if echo \$response | grep -q '<title>Welcome to My DevOps Project</title>'; then
                     echo "Validation successful: HTML content matches!"
                 else
