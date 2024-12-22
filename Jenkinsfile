@@ -54,7 +54,8 @@ environment {
     deploymentName = "devsecops"
     containerName = "devsecops-container"
     serviceName = "devsecops-svc"
-    imageName = "mafike1/numeric-app:${GIT_COMMIT}"
+    dockerTag = "" // Will be dynamically updated
+    imageName = "mafike1/numeric-app:${dockerTag}"
     applicationURL = "http://192.168.33.11"
     applicationURI = "/increment/99"
     NEXUS_VERSION = "nexus3"
@@ -252,47 +253,50 @@ environment {
         }
     }
 } */
-        stage('Docker Build and Push') {
-    when {
-        anyOf {
-            branch 'develop'
-            branch 'main'
-            expression { env.BRANCH_NAME.startsWith('feature/') }
-        }
-    }
-    steps {
-        withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-            script {
-                cache(maxCacheSize: 1073741824, defaultBranch: 'main', caches: [
-                    arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
-                ]) {
-                    try {
-                        def dockerTag
-                        def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
-                        
-                        if (env.BRANCH_NAME.startsWith('feature/')) {
-                            dockerTag = "feature-${sanitizedBranchName}-${GIT_COMMIT}"
-                        } else if (env.BRANCH_NAME == 'develop') {
-                            dockerTag = "staging-${GIT_COMMIT}"
-                        } else if (env.BRANCH_NAME == 'main') {
-                            dockerTag = "prod-${GIT_COMMIT}"
+     stage('Docker Build and Push') {
+            when {
+                anyOf {
+                    branch 'develop'
+                    branch 'main'
+                    expression { env.BRANCH_NAME.startsWith('feature/') }
+                }
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    script {
+                        cache(maxCacheSize: 1073741824, defaultBranch: 'main', caches: [
+                            arbitraryFileCache(path: 'target', cacheValidityDecidingFile: 'pom.xml')
+                        ]) {
+                            try {
+                                // Determine the tag dynamically
+                                def sanitizedBranchName = env.BRANCH_NAME.replaceAll('[^a-zA-Z0-9\\-_.]', '-') // Sanitize branch name
+                                
+                                if (env.BRANCH_NAME.startsWith('feature/')) {
+                                    env.dockerTag = "feature-${sanitizedBranchName}-${GIT_COMMIT}"
+                                } else if (env.BRANCH_NAME == 'develop') {
+                                    env.dockerTag = "staging-${GIT_COMMIT}"
+                                } else if (env.BRANCH_NAME == 'main') {
+                                    env.dockerTag = "prod-${GIT_COMMIT}"
+                                }
+
+                                // Use dynamically updated imageName
+                                env.imageName = "mafike1/numeric-app:${dockerTag}"
+
+                                sh """
+                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                                docker build -t ${imageName} .
+                                docker push ${imageName}
+                                """
+
+                                echo "Docker image ${imageName} successfully built and pushed."
+                            } catch (e) {
+                                echo "Error building and pushing Docker image: ${e.message}"
+                            }
                         }
-
-                        sh """
-                        echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-                        docker build -t mafike1/numeric-app:${dockerTag} .
-                        docker push mafike1/numeric-app:${dockerTag}
-                        """
-
-                        echo "Docker image mafike1/numeric-app:${dockerTag} successfully built and pushed."
-                    } catch (e) {
-                        echo "Error building and pushing Docker image: ${e.message}"
                     }
                 }
             }
         }
-    }
-}
 
   stage('Run Docker Container') {
     when {
@@ -300,7 +304,6 @@ environment {
     }
     steps {
         script {
-            def dockerTag = "mafike1/numeric-app:feature-${env.BRANCH_NAME}-${GIT_COMMIT}"
             def mysqlContainerName = "mysql-service"
             def appContainerName = "test-app"
             def networkName = "test-network"
@@ -341,7 +344,7 @@ environment {
                     -p 8080:8080 \
                     -e DB_USERNAME=root \
                     -e DB_PASSWORD=${mysqlRootPassword} \
-                    ${dockerTag}
+                    ${imageName}
                 """
 
                 // Wait for the application to initialize
