@@ -752,6 +752,9 @@ environment {
                 # Checkout the main branch
                 git checkout main
 
+                # Clean up local changes
+                git reset --hard
+
                 # Rebase main with the latest changes from remote
                 git pull --rebase origin main
 
