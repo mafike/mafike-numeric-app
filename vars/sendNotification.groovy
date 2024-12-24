@@ -1,5 +1,6 @@
 def call(String buildStatus = 'STARTED') {
- buildStatus = buildStatus ?: 'SUCCESS'
+    buildStatus = buildStatus ?: 'SUCCESS'
+
     // Set color and emoji based on build status
     def color
     def emoji
@@ -21,7 +22,6 @@ def call(String buildStatus = 'STARTED') {
     def failedStage = env.failedStage ?: "No Failed Stage"
     def branchName = env.BRANCH_NAME ?: "Unknown Branch"
     def buildURL = env.BUILD_URL ?: "http://default-build-url.com"
->>>>>>> develop
 
     // Slack attachments
     def attachments = [
