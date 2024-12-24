@@ -709,26 +709,82 @@ environment {
     }
     
     
- success {
-        script {
-            try {
-                env.failedStage = "none"
-                env.emoji = ":white_check_mark: :tada: :thumbsup_all:"
-                sendNotification currentBuild.result
-            } catch (e) {
-                echo "Error sending success notification: ${e.message}"
+  success {
+    script {
+        try {
+            env.failedStage = "none"
+            env.emoji = ":white_check_mark: :tada: :thumbsup_all:"
+            sendNotification(currentBuild.result) // Using original working notification
+
+            // Automerge Logic
+            if (env.BRANCH_NAME.startsWith('feature/')) {
+                echo "Feature branch ${env.BRANCH_NAME} pipeline passed. Attempting to merge into develop..."
+                sh '''
+                git config --global user.email "jenkins@example.com"
+                git config --global user.name "Jenkins"
+                git config rerere.enabled true
+
+                # Fetch all remote branches
+                git fetch origin
+
+                # Checkout the develop branch
+                git checkout develop
+
+                # Rebase develop with the latest changes from remote
+                git pull --rebase origin develop
+
+                # Merge feature branch into develop
+                git merge ${env.BRANCH_NAME}
+
+                # Push the updated develop branch to the remote repository
+                git push origin develop
+                '''
+            } else if (env.BRANCH_NAME == 'develop') {
+                echo "Develop branch pipeline passed. Attempting to merge into main..."
+                sh '''
+                git config --global user.email "jenkins@example.com"
+                git config --global user.name "Jenkins"
+                git config rerere.enabled true
+
+                # Fetch all remote branches
+                git fetch origin
+
+                # Checkout the main branch
+                git checkout main
+
+                # Clean up local changes
+                git reset --hard
+
+                # Rebase main with the latest changes from remote
+                git pull --rebase origin main
+
+                # Merge develop into main
+                git merge origin/develop
+
+                # Push the updated main branch to the remote repository
+                git push origin main
+                '''
             }
+
+        } catch (e) {
+            echo "Error during success logic or automerge: ${e.message}"
+            env.failedStage = "Automerge"
+            env.emoji = ":x: :red_circle: :sos:"
+            sendNotification(currentBuild.result) // Notify Slack of failure during automerge
         }
     }
+}
 
-     failure {
+
+
+    failure {
         script {
             try {
-                def failedStages = getFailedStages(currentBuild)
+                def failedStages = getFailedStages(currentBuild) // Fetch failed stages
                 env.failedStage = failedStages.failedStageName
                 echo "Failed Stage: ${env.failedStage}"
                 env.emoji = ":x: :red_circle: :sos:"
-                sendNotification currentBuild.result
+                sendNotification(currentBuild.result) // Notify Slack of failure
             } catch (e) {
                 echo "Error fetching failed stages or sending failure notification: ${e.message}"
             }
