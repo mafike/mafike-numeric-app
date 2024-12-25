@@ -493,7 +493,7 @@ environment {
         }
     }
 }
-  /*
+  
      stage('K8S Deployment - DEV') {
        when {
                 branch 'develop'
@@ -568,7 +568,7 @@ environment {
           sh 'bash zap.sh'
         }
       }
-    } */
+    } 
    stage ('Manual Approval'){
      when {
       branch 'main'
@@ -713,7 +713,7 @@ environment {
         script {
             try {
                 // Automerge Logic
-            /*    if (env.BRANCH_NAME.startsWith('feature/')) {
+                if (env.BRANCH_NAME.startsWith('feature/')) {
                     echo "Feature branch ${env.BRANCH_NAME} pipeline passed. Attempting to merge into develop..."
                     sh '''
                     git fetch origin
@@ -753,7 +753,7 @@ environment {
                     # Push the updated main branch to the remote repository
                     git push origin main
                     '''
-                } */
+                }
 
                 // Notify success if automerge completes
                 echo "Automerge completed successfully."

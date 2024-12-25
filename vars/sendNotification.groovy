@@ -18,7 +18,7 @@ def call(String buildStatus = 'STARTED') {
 
 // slackSend(color: color, message: msg)
 
- /* attachments = [
+ attachments = [
     [
       "color": color,
       "blocks": [
@@ -147,8 +147,8 @@ def call(String buildStatus = 'STARTED') {
         ]
       ]
     ]
-  ] */
+  ]
 
- slackSend(iconEmoji: emoji)
+ slackSend(iconEmoji: emoji, attachments: attachments)
 
 }
