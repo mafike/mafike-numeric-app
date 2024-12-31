@@ -571,7 +571,7 @@ environment {
     } 
    stage ('Manual Approval'){
      when {
-      branch 'main'
+      branch 'develop'
      }
     steps {
      timeout(time: 2, unit: 'DAYS') {

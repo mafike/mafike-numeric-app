@@ -42,14 +42,20 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
     // Custom filter to add security headers
     public static class CustomHeaderFilter extends OncePerRequestFilter {
         @Override
-        protected void doFilterInternal(@SuppressWarnings("null") HttpServletRequest request, @SuppressWarnings("null") HttpServletResponse response, @SuppressWarnings("null") FilterChain filterChain)
-                throws ServletException, IOException {
+        protected void doFilterInternal(
+                HttpServletRequest request, 
+                HttpServletResponse response, 
+                FilterChain filterChain) throws ServletException, IOException {
+
+            // Add headers for enhanced security
             response.addHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
             response.addHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; object-src 'none';");
             response.addHeader("X-Frame-Options", "DENY");
             response.addHeader("X-Content-Type-Options", "nosniff");
             response.addHeader("Cross-Origin-Resource-Policy", "same-origin");
             response.addHeader("Cross-Origin-Opener-Policy", "same-origin");
+            
+            // Proceed with the filter chain
             filterChain.doFilter(request, response);
         }
     }
